@@ -437,6 +437,7 @@ public:
     void DoConsensusVoteForAllActiveMasternodes(CTransaction& tx, int64_t nBlockHeight);
     void EnableHotColdMasterNode(CTxIn& newVin, CService& newService);
     CActiveMasternode* FindOrCreateActiveMasternode(CTxIn& newVin);
+    std::vector<CActiveMasternode*> FindOrCreateActiveMasternodesFromCoins();
     std::string GetActiveMasternodeStatusMessages();
     CTxIn GetPrimaryActiveMasternodeVin();
     void ManageStatuses();

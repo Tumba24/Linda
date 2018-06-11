@@ -333,23 +333,22 @@ Value masternode(const Array& params, bool fHelp)
             }
         }
 
-        CTxIn vin;
-        CPubKey pubKeyCollateralAddress;
-        CKey keyCollateralAddress;
-
-        if(!CActiveMasternode().GetMasterNodeVin(vin, pubKeyCollateralAddress, keyCollateralAddress))
+        std::vector<CActiveMasternode*> activeMasternodes = activeMasternodeManager.FindOrCreateActiveMasternodesFromCoins();
+        if (activeMasternodes.size() < 1)
         {
             return "Could not find suitable coins!";
         }
 
-        CActiveMasternode* activeMasternode = activeMasternodeManager.FindOrCreateActiveMasternode(vin);
-
-        if(activeMasternode->status != MASTERNODE_REMOTELY_ENABLED && activeMasternode->status != MASTERNODE_IS_CAPABLE){
-            activeMasternode->status = MASTERNODE_NOT_PROCESSED; // TODO: consider better way
-            std::string errorMessage;
-            activeMasternode->ManageStatus();
-            pwalletMain->Lock();
+        BOOST_FOREACH(CActiveMasternode* activeMasternode, activeMasternodes)
+        {
+            if(activeMasternode->status != MASTERNODE_REMOTELY_ENABLED && activeMasternode->status != MASTERNODE_IS_CAPABLE)
+            {
+                activeMasternode->status = MASTERNODE_NOT_PROCESSED; // TODO: consider better way
+                activeMasternode->ManageStatus();
+            }
         }
+
+        pwalletMain->Lock();
 
         return activeMasternodeManager.GetActiveMasternodeStatusMessages();
     }

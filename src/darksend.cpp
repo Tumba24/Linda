@@ -2190,6 +2190,22 @@ CActiveMasternode* CDarkSendActiveMasternodeManager::FindOrCreateActiveMasternod
     return activeMasternode;
 }
 
+std::vector<CActiveMasternode*> CDarkSendActiveMasternodeManager::FindOrCreateActiveMasternodesFromCoins()
+{
+    std::vector<COutput> possibleCoins = CActiveMasternode().SelectCoinsMasternode();
+
+    std::vector<CActiveMasternode*> activeMasernodes;
+    BOOST_FOREACH(COutput& out, possibleCoins) {
+
+        CTxIn vin = CTxIn(out.tx->GetHash(), out.i);
+
+        CActiveMasternode* activeMasternode = FindOrCreateActiveMasternode(vin);
+        activeMasernodes.push_back(activeMasternode);
+    }
+
+    return activeMasernodes;
+}
+
 std::string CDarkSendActiveMasternodeManager::GetActiveMasternodeStatusMessages()
 {
     std::string activeMasternodeMessages = "";
