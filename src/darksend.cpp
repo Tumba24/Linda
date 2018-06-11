@@ -38,8 +38,7 @@ std::vector<CDarksendQueue> vecDarksendQueue;
 std::vector<CTxIn> vecMasternodesUsed;
 // keep track of the scanning errors I've seen
 map<uint256, CDarksendBroadcastTx> mapDarksendBroadcastTxes;
-//
-CActiveMasternode activeMasternode;
+CDarkSendActiveMasternodeManager activeMasternodeManager;
 
 // count peers we've requested the list from
 int RequestedMasterNodeList = 0;
@@ -122,7 +121,9 @@ void ProcessMessageDarksend(CNode* pfrom, std::string& strCommand, CDataStream& 
         vRecv >> nDenom >> txCollateral;
 
         std::string error = "";
-        int mn = GetMasternodeByVin(activeMasternode.vin);
+
+        CTxIn primaryActiveMasternodeVin = activeMasternodeManager.GetPrimaryActiveMasternodeVin();
+        int mn = GetMasternodeByVin(primaryActiveMasternodeVin);
         if(mn == -1){
             std::string strError = _("Not in the masternode list.");
             pfrom->PushMessage("dssu", darkSendPool.sessionID, darkSendPool.GetState(), darkSendPool.GetEntriesCount(), MASTERNODE_REJECTED, strError);
@@ -604,7 +605,7 @@ void CDarkSendPool::Check()
                 if(!mapDarksendBroadcastTxes.count(txNew.GetHash())){
                     CDarksendBroadcastTx dstx;
                     dstx.tx = txNew;
-                    dstx.vin = activeMasternode.vin;
+                    dstx.vin = activeMasternodeManager.GetPrimaryActiveMasternodeVin();
                     dstx.vchSig = vchSig;
                     dstx.sigTime = sigTime;
 
@@ -821,7 +822,7 @@ void CDarkSendPool::CheckTimeout(){
     if(state == POOL_STATUS_QUEUE && sessionUsers == GetMaxPoolTransactions()) {
         CDarksendQueue dsq;
         dsq.nDenom = sessionDenom;
-        dsq.vin = activeMasternode.vin;
+        dsq.vin = activeMasternodeManager.GetPrimaryActiveMasternodeVin();
         dsq.time = GetTime();
         dsq.ready = true;
         dsq.Sign();
@@ -1845,7 +1846,7 @@ bool CDarkSendPool::IsCompatibleWithSession(int64_t nDenom, CTransaction txColla
             //broadcast that I'm accepting entries, only if it's the first entry though
             CDarksendQueue dsq;
             dsq.nDenom = nDenom;
-            dsq.vin = activeMasternode.vin;
+            dsq.vin = activeMasternodeManager.GetPrimaryActiveMasternodeVin();
             dsq.time = GetTime();
             dsq.Sign();
             dsq.Relay();
@@ -2151,6 +2152,99 @@ bool CDarksendQueue::CheckSignature()
     return false;
 }
 
+CDarkSendActiveMasternodeManager::CDarkSendActiveMasternodeManager()
+{
+    mapActiveMasternodes = std::map<std::string, CActiveMasternode*>();
+}
+
+void CDarkSendActiveMasternodeManager::DoConsensusVoteForAllActiveMasternodes(CTransaction& tx, int64_t nBlockHeight)
+{
+    for (std::map<std::string, CActiveMasternode*>::iterator active = mapActiveMasternodes.begin(); active != mapActiveMasternodes.end(); active++)
+    {
+        DoConsensusVote(active->second->vin, tx, nBlockHeight);
+    }
+}
+
+void CDarkSendActiveMasternodeManager::EnableHotColdMasterNode(CTxIn& newVin, CService& newService)
+{
+    CActiveMasternode* activeMasternode = FindOrCreateActiveMasternode(newVin);
+    activeMasternode->EnableHotColdMasterNode(newVin, newService);
+}
+
+CActiveMasternode* CDarkSendActiveMasternodeManager::FindOrCreateActiveMasternode(CTxIn& newVin)
+{
+    std::string vinStr = newVin.ToString();
+    std::map<std::string, CActiveMasternode*>::iterator activeIterator;
+
+    activeIterator = mapActiveMasternodes.find(vinStr);
+    if (activeIterator != mapActiveMasternodes.end())
+    {
+        return activeIterator->second;
+    }
+
+    CActiveMasternode* activeMasternode = new CActiveMasternode();
+    activeMasternode->pubKeyMasternode = publicKey;
+    activeMasternode->vin = newVin;
+
+    mapActiveMasternodes.insert(std::make_pair(vinStr, activeMasternode));
+    return activeMasternode;
+}
+
+std::string CDarkSendActiveMasternodeManager::GetActiveMasternodeStatusMessages()
+{
+    std::string activeMasternodeMessages = "";
+    bool didFirst = false;
+
+    for (std::map<std::string, CActiveMasternode*>::iterator active = mapActiveMasternodes.begin(); active != mapActiveMasternodes.end(); active++)
+    {
+        if (didFirst)
+        {
+            activeMasternodeMessages += "\n";
+        }
+
+        didFirst = true;
+
+        activeMasternodeMessages += active->first + " " + active->second->GetStatusMessage();
+    }
+
+    return activeMasternodeMessages;
+}
+
+CTxIn CDarkSendActiveMasternodeManager::GetPrimaryActiveMasternodeVin()
+{
+    if (mapActiveMasternodes.size() < 1)
+    {
+        return CTxIn();
+    }
+
+    return mapActiveMasternodes.begin()->second->vin;
+}
+
+void CDarkSendActiveMasternodeManager::ManageStatuses()
+{
+    for (std::map<std::string, CActiveMasternode*>::iterator active = mapActiveMasternodes.begin(); active != mapActiveMasternodes.end(); active++)
+    {
+        active->second->ManageStatus();
+    }
+}
+
+bool CDarkSendActiveMasternodeManager::StopAllActiveMasternodes(std::string& errorMessage)
+{
+    for (std::map<std::string, CActiveMasternode*>::iterator active = mapActiveMasternodes.begin(); active != mapActiveMasternodes.end(); active++)
+    {
+        if(!active->second->StopMasterNode(errorMessage)) 
+        {
+        	return false;
+        }
+    }
+
+    return true;
+}
+
+CDarkSendActiveMasternodeManager::~CDarkSendActiveMasternodeManager()
+{
+    mapActiveMasternodes.clear();
+}
 
 //TODO: Rename/move to core
 void ThreadCheckDarkSendPool()
@@ -2226,7 +2320,7 @@ void ThreadCheckDarkSendPool()
         }
 
         if(c % MASTERNODE_PING_SECONDS == 0){
-            activeMasternode.ManageStatus();
+            activeMasternodeManager.ManageStatuses();
         }
 
         if(c % 60 == 0){

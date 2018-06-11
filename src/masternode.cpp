@@ -64,7 +64,7 @@ void ProcessMessageMasternode(CNode* pfrom, std::string& strCommand, CDataStream
         std::string strMessage;
 
         // 70047 and greater
-        vRecv >> vin >> addr >> vchSig >> sigTime >> pubkey >> pubkey2 >> count >> current >> lastUpdated >> protocolVersion;
+         vRecv >> vin >> addr >> vchSig >> sigTime >> pubkey >> pubkey2 >> count >> current >> lastUpdated >> protocolVersion;
 
         // make sure signature isn't in the future (past is OK)
         if (sigTime > GetAdjustedTime() + 60 * 60) {
@@ -184,8 +184,9 @@ void ProcessMessageMasternode(CNode* pfrom, std::string& strCommand, CDataStream
             vecMasternodes.push_back(mn);
 
             // if it matches our masternodeprivkey, then we've been remotely activated
-            if(pubkey2 == activeMasternode.pubKeyMasternode && protocolVersion == PROTOCOL_VERSION){
-                activeMasternode.EnableHotColdMasterNode(vin, addr);
+            if(pubkey2 == activeMasternodeManager.publicKey && protocolVersion == PROTOCOL_VERSION)
+            {
+                activeMasternodeManager.EnableHotColdMasterNode(vin, addr);
             }
 
             if(count == -1 && !isLocal)

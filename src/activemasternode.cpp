@@ -483,3 +483,14 @@ bool CActiveMasternode::EnableHotColdMasterNode(CTxIn& newVin, CService& newServ
 
     return true;
 }
+
+std::string CActiveMasternode::GetStatusMessage()
+{
+    if(this->status == MASTERNODE_IS_CAPABLE) return "successfully started masternode";
+    if(this->status == MASTERNODE_NOT_CAPABLE) return "not capable masternode(cmd=debug): " + this->notCapableReason;
+    if(this->status == MASTERNODE_STOPPED) return "masternode is stopped";
+    if(this->status == MASTERNODE_INPUT_TOO_NEW) return "masternode input must have at least 15 confirmations";
+    if(this->status == MASTERNODE_SYNC_IN_PROCESS) return "sync in process. Must wait until client is synced to start.";
+    if(this->status == MASTERNODE_REMOTELY_ENABLED) return "masternode started remotely";
+    return "unkown";
+}

@@ -77,7 +77,7 @@ void ProcessMessageInstantX(CNode* pfrom, std::string& strCommand, CDataStream& 
             BOOST_FOREACH(CNode* pnode, vNodes)
                 pnode->PushMessage("inv", vInv);
 
-            DoConsensusVote(tx, nBlockHeight);
+            activeMasternodeManager.DoConsensusVoteForAllActiveMasternodes(tx, nBlockHeight);
 
             mapTxLockReq.insert(make_pair(tx.GetHash(), tx));
 
@@ -256,11 +256,11 @@ int64_t CreateNewLock(CTransaction tx)
 }
 
 // check if we need to vote on this transaction
-void DoConsensusVote(CTransaction& tx, int64_t nBlockHeight)
+void DoConsensusVote(CTxIn& vin, CTransaction& tx, int64_t nBlockHeight)
 {
     if(!fMasterNode) return;
 
-    int n = GetMasternodeRank(activeMasternode.vin, nBlockHeight, MIN_INSTANTX_PROTO_VERSION);
+    int n = GetMasternodeRank(vin, nBlockHeight, MIN_INSTANTX_PROTO_VERSION);
 
     if(n == -1)
     {
@@ -280,7 +280,7 @@ void DoConsensusVote(CTransaction& tx, int64_t nBlockHeight)
     if(fDebug) LogPrintf("InstantX::DoConsensusVote - In the top %d (%d)\n", INSTANTX_SIGNATURES_TOTAL, n);
 
     CConsensusVote ctx;
-    ctx.vinMasternode = activeMasternode.vin;
+    ctx.vinMasternode = vin;
     ctx.txHash = tx.GetHash();
     ctx.nBlockHeight = nBlockHeight;
     if(!ctx.Sign()){

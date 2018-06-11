@@ -152,15 +152,14 @@ Value masternode(const Array& params, bool fHelp)
         }
 
         std::string errorMessage;
-        if(!activeMasternode.StopMasterNode(errorMessage)) {
+        if(!activeMasternodeManager.StopAllActiveMasternodes(errorMessage)) 
+        {
         	return "stop failed: " + errorMessage;
         }
+
         pwalletMain->Lock();
 
-        if(activeMasternode.status == MASTERNODE_STOPPED) return "successfully stopped masternode";
-        if(activeMasternode.status == MASTERNODE_NOT_CAPABLE) return "not capable masternode";
-
-        return "unknown";
+        return activeMasternodeManager.GetActiveMasternodeStatusMessages();
     }
 
     if (strCommand == "stop-alias")
@@ -197,7 +196,7 @@ Value masternode(const Array& params, bool fHelp)
     		if(mne.getAlias() == alias) {
     			found = true;
     			std::string errorMessage;
-    			bool result = activeMasternode.StopMasterNode(mne.getIp(), mne.getPrivKey(), errorMessage);
+                bool result = CActiveMasternode().StopMasterNode(mne.getIp(), mne.getPrivKey(), errorMessage);
 
 				statusObj.push_back(Pair("result", result ? "successful" : "failed"));
     			if(!result) {
@@ -245,7 +244,7 @@ Value masternode(const Array& params, bool fHelp)
 			total++;
 
 			std::string errorMessage;
-			bool result = activeMasternode.StopMasterNode(mne.getIp(), mne.getPrivKey(), errorMessage);
+			bool result = CActiveMasternode().StopMasterNode(mne.getIp(), mne.getPrivKey(), errorMessage);
 
 			Object statusObj;
 			statusObj.push_back(Pair("alias", mne.getAlias()));
@@ -334,21 +333,25 @@ Value masternode(const Array& params, bool fHelp)
             }
         }
 
-        if(activeMasternode.status != MASTERNODE_REMOTELY_ENABLED && activeMasternode.status != MASTERNODE_IS_CAPABLE){
-            activeMasternode.status = MASTERNODE_NOT_PROCESSED; // TODO: consider better way
+        CTxIn vin;
+        CPubKey pubKeyCollateralAddress;
+        CKey keyCollateralAddress;
+
+        if(!CActiveMasternode().GetMasterNodeVin(vin, pubKeyCollateralAddress, keyCollateralAddress))
+        {
+            return "Could not find suitable coins!";
+        }
+
+        CActiveMasternode* activeMasternode = activeMasternodeManager.FindOrCreateActiveMasternode(vin);
+
+        if(activeMasternode->status != MASTERNODE_REMOTELY_ENABLED && activeMasternode->status != MASTERNODE_IS_CAPABLE){
+            activeMasternode->status = MASTERNODE_NOT_PROCESSED; // TODO: consider better way
             std::string errorMessage;
-            activeMasternode.ManageStatus();
+            activeMasternode->ManageStatus();
             pwalletMain->Lock();
         }
 
-        if(activeMasternode.status == MASTERNODE_REMOTELY_ENABLED) return "masternode started remotely";
-        if(activeMasternode.status == MASTERNODE_INPUT_TOO_NEW) return "masternode input must have at least 15 confirmations";
-        if(activeMasternode.status == MASTERNODE_STOPPED) return "masternode is stopped";
-        if(activeMasternode.status == MASTERNODE_IS_CAPABLE) return "successfully started masternode";
-        if(activeMasternode.status == MASTERNODE_NOT_CAPABLE) return "not capable masternode(cmd=start): " + activeMasternode.notCapableReason;
-        if(activeMasternode.status == MASTERNODE_SYNC_IN_PROCESS) return "sync in process. Must wait until client is synced to start.";
-
-        return "unknown";
+        return activeMasternodeManager.GetActiveMasternodeStatusMessages();
     }
 
     if (strCommand == "start-alias")
@@ -385,7 +388,7 @@ Value masternode(const Array& params, bool fHelp)
     		if(mne.getAlias() == alias) {
     			found = true;
     			std::string errorMessage;
-    			bool result = activeMasternode.Register(mne.getIp(), mne.getPrivKey(), mne.getTxHash(), mne.getOutputIndex(), errorMessage);
+    			bool result = CActiveMasternode().Register(mne.getIp(), mne.getPrivKey(), mne.getTxHash(), mne.getOutputIndex(), errorMessage);
 
     			statusObj.push_back(Pair("result", result ? "successful" : "failed"));
     			if(!result) {
@@ -436,7 +439,7 @@ Value masternode(const Array& params, bool fHelp)
 			total++;
 
 			std::string errorMessage;
-			bool result = activeMasternode.Register(mne.getIp(), mne.getPrivKey(), mne.getTxHash(), mne.getOutputIndex(), errorMessage);
+			bool result = CActiveMasternode().Register(mne.getIp(), mne.getPrivKey(), mne.getTxHash(), mne.getOutputIndex(), errorMessage);
 
 			Object statusObj;
 			statusObj.push_back(Pair("alias", mne.getAlias()));
@@ -463,17 +466,16 @@ Value masternode(const Array& params, bool fHelp)
 
     if (strCommand == "debug")
     {
-        if(activeMasternode.status == MASTERNODE_REMOTELY_ENABLED) return "masternode started remotely";
-        if(activeMasternode.status == MASTERNODE_INPUT_TOO_NEW) return "masternode input must have at least 15 confirmations";
-        if(activeMasternode.status == MASTERNODE_IS_CAPABLE) return "successfully started masternode";
-        if(activeMasternode.status == MASTERNODE_STOPPED) return "masternode is stopped";
-        if(activeMasternode.status == MASTERNODE_NOT_CAPABLE) return "not capable masternode(cmd=debug): " + activeMasternode.notCapableReason;
-        if(activeMasternode.status == MASTERNODE_SYNC_IN_PROCESS) return "sync in process. Must wait until client is synced to start.";
+        std::string statusMessage = activeMasternodeManager.GetActiveMasternodeStatusMessages();
+        if (!statusMessage.empty())
+        {
+            return statusMessage;
+        }
 
         CTxIn vin = CTxIn();
         CPubKey pubkey = CScript();
         CKey key;
-        bool found = activeMasternode.GetMasterNodeVin(vin, pubkey, key);
+        bool found = CActiveMasternode().GetMasterNodeVin(vin, pubkey, key);
         if(!found){
             return "Missing masternode input, please look at the documentation for instructions on masternode creation";
         } else {
@@ -571,7 +573,7 @@ Value masternode(const Array& params, bool fHelp)
 
     if (strCommand == "outputs"){
         // Find possible candidates
-        vector<COutput> possibleCoins = activeMasternode.SelectCoinsMasternode();
+        vector<COutput> possibleCoins = CActiveMasternode().SelectCoinsMasternode();
 
         Object obj;
         BOOST_FOREACH(COutput& out, possibleCoins) {

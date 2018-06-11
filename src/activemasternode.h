@@ -60,6 +60,8 @@ public:
 
     // enable hot wallet mode (run a masternode with no funds)
     bool EnableHotColdMasterNode(CTxIn& vin, CService& addr);
+
+    std::string GetStatusMessage();
 };
 
 #endif

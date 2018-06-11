@@ -9,8 +9,10 @@
 #include "main.h"
 #include "masternode.h"
 #include "activemasternode.h"
+#include "instantx.h"
 
 class CTxIn;
+class CDarkSendActiveMasternodeManager;
 class CDarkSendPool;
 class CDarkSendSigner;
 class CMasterNodeVote;
@@ -43,7 +45,7 @@ extern CDarkSendSigner darkSendSigner;
 extern std::vector<CDarksendQueue> vecDarksendQueue;
 extern std::string strMasterNodePrivKey;
 extern map<uint256, CDarksendBroadcastTx> mapDarksendBroadcastTxes;
-extern CActiveMasternode activeMasternode;
+extern CDarkSendActiveMasternodeManager activeMasternodeManager;
 
 //specific messages for the Darksend protocol
 void ProcessMessageDarksend(CNode* pfrom, std::string& strCommand, CDataStream& vRecv);
@@ -424,6 +426,26 @@ public:
     int GetDenominationsByAmounts(std::vector<int64_t>& vecAmount);
 };
 
+class CDarkSendActiveMasternodeManager
+{
+public:
+    CPubKey publicKey;
+
+    CDarkSendActiveMasternodeManager();
+    ~CDarkSendActiveMasternodeManager();
+    
+    void DoConsensusVoteForAllActiveMasternodes(CTransaction& tx, int64_t nBlockHeight);
+    void EnableHotColdMasterNode(CTxIn& newVin, CService& newService);
+    CActiveMasternode* FindOrCreateActiveMasternode(CTxIn& newVin);
+    std::string GetActiveMasternodeStatusMessages();
+    CTxIn GetPrimaryActiveMasternodeVin();
+    void ManageStatuses();
+    bool StopAllActiveMasternodes(std::string& errorMessage);
+
+private:
+    map<std::string, CActiveMasternode*> mapActiveMasternodes;
+
+};
 
 void ConnectToDarkSendMasterNodeWinner();
 
