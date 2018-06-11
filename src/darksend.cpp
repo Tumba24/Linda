@@ -2198,9 +2198,12 @@ std::vector<CActiveMasternode*> CDarkSendActiveMasternodeManager::FindOrCreateAc
     BOOST_FOREACH(COutput& out, possibleCoins) {
 
         CTxIn vin = CTxIn(out.tx->GetHash(), out.i);
+        FindOrCreateActiveMasternode(vin);
+    }
 
-        CActiveMasternode* activeMasternode = FindOrCreateActiveMasternode(vin);
-        activeMasernodes.push_back(activeMasternode);
+    for (std::map<std::string, CActiveMasternode*>::iterator active = mapActiveMasternodes.begin(); active != mapActiveMasternodes.end(); active++)
+    {
+        activeMasernodes.push_back(active->second);
     }
 
     return activeMasernodes;
